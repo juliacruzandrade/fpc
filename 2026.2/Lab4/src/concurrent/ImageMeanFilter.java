@@ -1,6 +1,8 @@
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.Semaphore;
+
 import javax.imageio.ImageIO;
 
 /**
@@ -19,6 +21,9 @@ import javax.imageio.ImageIO;
  * 
  * <p>Author: temmanuel@comptuacao.ufcg.edu.br</p>
  */
+
+
+
 public class ImageMeanFilter {
     
     /**
@@ -29,7 +34,7 @@ public class ImageMeanFilter {
      * @param kernelSize Size of mean kernel
      * @throws IOException If there is an error reading/writing
      */
-    public static void applyMeanFilter(String inputPath, String outputPath, int kernelSize) throws IOException {
+    public static void applyMeanFilter(String inputPath, String outputPath, int kernelSize, int N) throws IOException {
         // Load image
         BufferedImage originalImage = ImageIO.read(new File(inputPath));
         
@@ -44,19 +49,40 @@ public class ImageMeanFilter {
         int width = originalImage.getWidth();
         int height = originalImage.getHeight();
         // Process each pixel
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                // Calculate neighborhood average
-                int[] avgColor = calculateNeighborhoodAverage(originalImage, x, y, kernelSize);
-                
-                // Set filtered pixel
-                filteredImage.setRGB(x, y, 
-                    (avgColor[0] << 16) | 
-                    (avgColor[1] << 8)  | 
-                    avgColor[2]
-                );
+
+        int celulas_totais = height * width;
+        int celulas_alteradas_totais = 0;
+        Semaphore mutex = new Semaphore(1);
+
+        Thread[] threads = new Thread[N];
+
+        for(int i =0; i < N; i++){
+            Work w = new Work(height, width, kernelSize, originalImage, filteredImage, kernelSize, N);
+            Thread t = new Thread(w);
+            threads[i] = t;
+            t.start();
+            
+            try {
+                mutex.acquire();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            celulas_alteradas_totais += w.getCelulasAlteradas();
+            mutex.release();
+        }
+
+        for(int i = 0; i < N; i++){
+            try{
+                threads[i].join();
+            } catch(Exception e){
+                System.out.println("deu errado");
             }
         }
+
+        System.out.println("celulas alteradas: " + celulas_alteradas_totais);
+        System.out.println("celulas nao alteradas: " + (celulas_totais - celulas_alteradas_totais));
+
+        
         
         // Save filtered image
         ImageIO.write(filteredImage, "jpg", new File(outputPath));
@@ -71,7 +97,103 @@ public class ImageMeanFilter {
      * @param kernelSize Kernel size
      * @return Array with R, G, B averages
      */
-    private static int[] calculateNeighborhoodAverage(BufferedImage image, int centerX, int centerY, int kernelSize) {
+  
+    
+    /**
+     * Main method for demonstration
+     * 
+     * Usage: java ImageMeanFilter <input_file>
+     * 
+     * Arguments:
+     *   input_file - Path to the input image file to be processed
+     *                Supported formats: JPG, PNG
+     * 
+     * Example:
+     *   java ImageMeanFilter input.jpg
+     * 
+     * The program will generate a filtered output image named "filtered_output.jpg"
+     * using a 7x7 mean filter kernel
+     */
+    public static void main(String[] args) {
+        
+        
+        if (args.length < 1) {
+            System.err.println("Usage: java ImageMeanFilter <input_file>");
+            System.exit(1);
+        }
+
+        String inputFile = args[0];
+        String k = args[1];
+        int N = Integer.parseInt(k);
+        try {
+            applyMeanFilter(inputFile, "filtered_output.jpg", 7, N);
+        } catch (IOException e) {
+            System.err.println("Error processing image: " + e.getMessage());
+        }
+    }
+}
+
+
+class Work implements Runnable{
+
+    static int celulas_alteradas = 0;
+    Semaphore mutex = new Semaphore(1);
+
+
+    int height;
+    int width;
+    int kernelSize;
+    BufferedImage originalImage;
+    BufferedImage filteredImage;
+    int N;
+    int threadNumber;
+    
+    public Work(int height, int width, int kernelSize, BufferedImage originalImage, BufferedImage filteredImage, int n,
+                int threadNumber) {
+            this.height = height;
+            this.width = width;
+            this.kernelSize = kernelSize;
+            this.originalImage = originalImage;
+            this.filteredImage = filteredImage;
+            this.N = n;
+            this.threadNumber = threadNumber;
+        }
+
+    @Override
+    public void run(){
+        for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+
+                    if(x % N == threadNumber){
+                        // Calculate neighborhood average
+                        int[] avgColor = calculateNeighborhoodAverage(originalImage, x, y, kernelSize);
+                        
+                        // Set filtered pixel
+                        filteredImage.setRGB(x, y, 
+                            (avgColor[0] << 16) | 
+                            (avgColor[1] << 8)  | 
+                            avgColor[2]
+                        );
+
+                        try {
+                            mutex.acquire();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        celulas_alteradas++;
+                        mutex.release(); 
+                    }
+                }
+            }
+    }
+
+
+    public int getCelulasAlteradas(){
+        return celulas_alteradas;
+    }
+
+
+      private static int[] calculateNeighborhoodAverage(BufferedImage image, int centerX, int centerY, int kernelSize) {
         int width = image.getWidth();
         int height = image.getHeight();
         int pad = kernelSize / 2;
@@ -111,34 +233,8 @@ public class ImageMeanFilter {
             (int)(greenSum / pixelCount),
             (int)(blueSum / pixelCount)
         };
-    }
-    
-    /**
-     * Main method for demonstration
-     * 
-     * Usage: java ImageMeanFilter <input_file>
-     * 
-     * Arguments:
-     *   input_file - Path to the input image file to be processed
-     *                Supported formats: JPG, PNG
-     * 
-     * Example:
-     *   java ImageMeanFilter input.jpg
-     * 
-     * The program will generate a filtered output image named "filtered_output.jpg"
-     * using a 7x7 mean filter kernel
-     */
-    public static void main(String[] args) {
-        if (args.length < 1) {
-            System.err.println("Usage: java ImageMeanFilter <input_file>");
-            System.exit(1);
-        }
 
-        String inputFile = args[0];
-        try {
-            applyMeanFilter(inputFile, "filtered_output.jpg", 7);
-        } catch (IOException e) {
-            System.err.println("Error processing image: " + e.getMessage());
-        }
+   
     }
+
 }

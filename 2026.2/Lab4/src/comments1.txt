@@ -1,0 +1,3 @@
+A partir de N=8 (8 threads), o tempo de execução diminui à medida que o número de threads aumenta, o que mostra que a concorrência está melhorando o desempenho.
+Porém, aproximadamente a partir N=16, o desempenho começa a decair quase que imperceptivelmente, tornando-se notavelmente pior a partir de N=128, o que mostra que,
+ao usar muitas threads, causamos um overhead de criação que na realidade acaba piorando o desempenho e fazendo com que o programa demore mais tempo para rodar. 
