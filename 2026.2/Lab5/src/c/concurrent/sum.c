@@ -1,13 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
-int do_sum(const char *path) {
+void* do_sum(void* cpath) {
+
+    const char *path = (const char *) cpath;
+
     sleep(1); // emulating an adittional delay of 1 second
 	      //
+
     FILE *file = fopen(path, "rb");  // open in binary mode
     if (file == NULL) {
-        return -1;  // indicate error
+
     }
 
     int sum = 0;
@@ -17,18 +22,24 @@ int do_sum(const char *path) {
         sum += byte;
     }
 
+    if (sum >= 0) {
+        printf("%s : %d\n", path, sum);
+    }
+
     fclose(file);
-    return sum;
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {
+
+    pthread_t threads[argc-1];
     for (int i = 1; i < argc; i++) {
         const char *path = argv[i];
-        int sum = do_sum(path);
+        pthread_create(&threads[i-1], NULL, do_sum, &path);
+    }
 
-        if (sum >= 0) {
-            printf("%s : %d\n", path, sum);
-        }
+    for (int i = 1; i < argc; i++) {
+        pthread_join(threads[i-1], NULL);
     }
 
     return 0;

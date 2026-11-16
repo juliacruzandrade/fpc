@@ -37,9 +37,39 @@ public class Sum {
         }
 
 	//many exceptions could be thrown here. we don't care
+
+        Thread[] threads = new Thread[args.length];
+
+        int i = 0;
         for (String path : args) {
-            long sum = sum(path);
+            Thread t = new Thread(new Work(path));
+            threads[i] = t;
+            i++;
+            t.start();
+        }
+
+        for (Thread t : threads) {
+            t.join();
+        }
+
+    }
+}
+
+class Work implements Runnable {
+    public String path;
+    public long sum = 0;
+
+    public Work(String path) {
+        this.path = path;
+    }
+
+    @Override
+    public void run() {
+        try {
+            this.sum = Sum.sum(path);
             System.out.println(path + " : " + sum);
+        } catch (Exception e) {
+            System.err.println("erro");
         }
     }
 }
