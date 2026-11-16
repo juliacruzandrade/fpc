@@ -3,9 +3,13 @@
 #include <unistd.h>
 #include <pthread.h>
 
-void* do_sum(void* cpath) {
+typedef struct {
+    const char* path;
+} ThreadArgs;
 
-    const char *path = (const char *) cpath;
+void* do_sum(void* arg) {
+    ThreadArgs* args = (ThreadArgs*)arg;
+    const char* path = args->path;
 
     sleep(1); // emulating an adittional delay of 1 second
 	      //
@@ -33,14 +37,15 @@ void* do_sum(void* cpath) {
 int main(int argc, char *argv[]) {
 
     pthread_t threads[argc-1];
+    ThreadArgs args[argc-1];
     for (int i = 1; i < argc; i++) {
         const char *path = argv[i];
-        pthread_create(&threads[i-1], NULL, do_sum, &path);
+        args[i].path = path;
+        pthread_create(&threads[i], NULL, do_sum, &args[i]);
     }
 
     for (int i = 1; i < argc; i++) {
-        pthread_join(threads[i-1], NULL);
+        pthread_join(threads[i], NULL);
     }
-
     return 0;
 }
